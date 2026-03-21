@@ -20,6 +20,7 @@ If you contribute at all in any way to the project, please add your name to the 
 
 ## TO-DO
 - Create a command system
+- Implement shell (First fix printing and typing bugs. Line wraps act weird and backspace and shift are broken)
 - Remove Profanity
 - Make a website for it
 
