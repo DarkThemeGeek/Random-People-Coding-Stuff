@@ -35,6 +35,9 @@ If you contribute at all in any way to the project, please add your name to the 
 - Shell
 - Storage management/filesystem
 
+## Contact (If you want to be a point of contact email me and then you can add you email here)
+elroylilly@gmail.com for any questions
+
 ## Pictures
 
 <img width="1920" height="1080" alt="theosbooted" src="https://github.com/user-attachments/assets/498e0981-27eb-4e7d-a306-26bc7ed75c6f" />
