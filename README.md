@@ -4,6 +4,8 @@ We want to have a ton of random people come together and make their own individu
 
 ## How to Contribute:
 There are several ways you can contribute:
+- Give us ideas for the name and logo [here](https://forms.gle/33wz1AsVEKife6pB8)
+- Give us feedback [here](https://forms.gle/3aL4FJqvc8MZaJJv5)
 - Fix a typo or add better wording
 - Improve documentation
 - Add a new feature
