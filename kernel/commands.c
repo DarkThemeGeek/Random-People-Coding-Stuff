@@ -48,7 +48,7 @@ static void cmd_contributors(uint8_t color) {
     printf("CheeseFunnel23\n", color);
     printf("bonk enjoyer/dorito girl\n", BOLD_COLOR);
     printf("KaleidoscopeOld5841\n", color);
-    printf("WilliamMMM/billythemoon\n", color);
+    printf("billythemoon\n", color);
     printf("TheGirl790\n", color);
     printf("kotofyt\n", color);
     printf("xtn59\n", color);
@@ -56,6 +56,7 @@ static void cmd_contributors(uint8_t color) {
     printf("u/EastConsequence3792\n", color);
     printf("MorganPG1\n", color);
     printf("Zorx555\n", color);
+    printf("mckaylap2304\n", color);
 }
 
 static void cmd_setkeyswe(uint8_t color) {
