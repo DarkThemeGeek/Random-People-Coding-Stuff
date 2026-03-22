@@ -13,7 +13,6 @@ static Command commands[] = {
     { "setkeyswe", cmd_setkeyswe},
     { "setkeyus", cmd_setkeyus},
     { "setkeyuk", cmd_setkeyuk},
-    { "test",  cmd_test  },
     { "clear", cmd_clear },
 };
 
@@ -24,7 +23,6 @@ static int num_commands = sizeof(commands) / sizeof(commands[0]);
 static void cmd_help(uint8_t color) {
     printf("\nhelp   - show this message\n", color);
     printf("hello  - say hello\n", color);
-    printf("test   - placeholder\n", color);
     printf("contributors - Displays names of all contributors\n", color);
     printf("setkeyswe - Sets keyboard layout to Swedish QWERTY\n", color); // Zorx555 - Keyboard layout commands
     printf("setkeyus - Sets keyboard layout to US QWERTY\n", color);
@@ -34,10 +32,6 @@ static void cmd_help(uint8_t color) {
 
 static void cmd_hello(uint8_t color) {
     printf("\nHello, world!\n", color);
-}
-
-static void cmd_test(uint8_t color) {
-    printf("\nTest command has run successfully\n", color);
 }
 
 static void cmd_contributors(uint8_t color) {
