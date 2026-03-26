@@ -165,7 +165,7 @@ itos:
 
 ;; Messages
 
-INIT_MSG	db "Community OS Bootloader 1.0", 0xD, 0xA, 0x0
+INIT_MSG	db "Community OS Bootloader 1.0 (Almost 2.0)", 0xD, 0xA, 0x0
 PROTECTED_MSG	db "[Boot]: Entering protected mode.", 0xD, 0xA, 0x0
 DISK_ERR_MSG	db "[Boot]: Couldn't read disk: ", 0x0
 DISK_MSG	db "[Boot]: Attempting to read drive.", 0xD, 0xA, 0x0
@@ -213,7 +213,7 @@ protected_mode_exec:
 	mov	fs, ax
 	mov	gs, ax
 
-	jmp	0x8000		;; Finally, jumping to the kernel
+	jmp	0x8000		;; Finally, jumping to the kernel ;; Why 0x8000 instead of 0x1000?
 	;;hlt
 times 510 - ($ - $$) db 0
 

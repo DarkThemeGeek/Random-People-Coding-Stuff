@@ -17,9 +17,7 @@ CC_FLAGS = -m32 -ffreestanding -nostdlib -fno-builtin -fno-stack-protector -g -c
 AS_FLAGS = -f bin
 LD_FLAGS = -m elf_i386 -T linker.ld
 KERNEL_OBJECTS = kernel/kernel.o kernel/ports.o kernel/mem.o
-DRIVER_OBJECTS = kernel/drivers/vga.o kernel/drivers/keyboard.o kernel/drivers/tables/descriptor_tables_s.o \
-	kernel/drivers/tables/descriptor_tables_c.o kernel/drivers/tables/isr/isr.o kernel/drivers/tables/irq/irq_c.o \
-	kernel/drivers/tables/irq/irq_s.o kernel/drivers/tables/irq/timer.o
+DRIVER_OBJECTS = kernel/drivers/vga.o kernel/drivers/keyboard.o
 MISC_OBJECTS = kernel/colors.o kernel/terminal/terminal.o kernel/commands.o kernel/layouts/kb_layouts.o \
                kernel/comos/comos_lexer.o kernel/comos/comos_parser.o kernel/comos/comos_interp.o # ADDED
 # Builds the final disk image
@@ -41,19 +39,6 @@ kernel/drivers/vga.o: kernel/drivers/vga.c
 	$(CC) $(CC_FLAGS) $< -o $@ || $(CC2) $(CC_FLAGS) $< -o $@
 kernel/drivers/keyboard.o:  kernel/drivers/keyboard.c
 	$(CC) $(CC_FLAGS) $< -o $@ || $(CC2) $(CC_FLAGS) $< -o $@
-# GDT, IDT, IRQ & Timer (Pumpkicks)
-kernel/drivers/tables/descriptor_tables_c.o:  kernel/drivers/tables/descriptor_tables.c
-	$(CC) $(CC_FLAGS) $< -o $@ || $(CC2) $(CC_FLAGS) $< -o $@
-kernel/drivers/tables/isr/isr.o:  kernel/drivers/tables/isr/isr.c
-	$(CC) $(CC_FLAGS) $< -o $@ || $(CC2) $(CC_FLAGS) $< -o $@
-kernel/drivers/tables/descriptor_tables_s.o:  kernel/drivers/tables/descriptor_tables.s
-	$(AS) -felf32 $< -o $@
-kernel/drivers/tables/irq/irq_c.o:  kernel/drivers/tables/irq/irq.c
-	$(CC) $(CC_FLAGS) $< -o $@ || $(CC2) $(CC_FLAGS) $< -o $@
-kernel/drivers/tables/irq/timer.o: kernel/drivers/tables/irq/timer.c
-	$(CC) $(CC_FLAGS) $< -o $@ || $(CC2) $(CC_FLAGS) $< -o $@
-kernel/drivers/tables/irq/irq_s.o:  kernel/drivers/tables/irq/irq.s
-	$(AS) -felf32 $< -o $@
 
 kernel/ports.o: kernel/ports.c
 	$(CC) $(CC_FLAGS) $< -o $@ || $(CC2) $(CC_FLAGS) $< -o $@
@@ -83,7 +68,7 @@ os.img: bootloader/boot.bin kernel.bin
 	cat bootloader/boot.bin kernel.bin > os.img
 # Launch the image in QEMU
 run: os.img
-	qemu-system-i386 -s -drive format=raw,file=os.img
+	qemu-system-i386 -s -drive format=raw,file=os.img -usb
 clean:
 	rm -f $(KERNEL_OBJECTS) $(DRIVER_OBJECTS) $(MISC_OBJECTS) kernel.elf kernel.bin bootloader/boot.bin
 .PHONY: all run clean

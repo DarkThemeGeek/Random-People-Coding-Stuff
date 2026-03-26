@@ -1,10 +1,6 @@
 #include "commands.h"
 #include "colors.h"
-#include "drivers/tables/descriptor_tables.h"
 #include "drivers/keyboard.h"
-#include "drivers/tables/irq/irq.h"
-#include "drivers/tables/irq/timer.h"
-#include "drivers/tables/isr/isr.h"
 #include "drivers/vga.h"
 #include "layouts/kb_layouts.h"
 #include "terminal/terminal.h"
@@ -24,9 +20,6 @@ static Command commands[] = {
     { "version", cmd_version },
     { "chars", cmd_chars },
     { "comos", cmd_comos },
-    { "init_tables", cmd_init_gdtidt },
-    { "send_intr", cmd_send_intr },
-    { "start_timer", cmd_start_timer },
 };
 
 static int num_commands = sizeof(commands) / sizeof(commands[0]);
@@ -129,29 +122,6 @@ static void cmd_comos(uint8_t color) {
     comos_run(&comos_state, demo);
 }
 
-static void cmd_init_gdtidt(uint8_t color) { // Added by Pumpkicks
-    init_desc_tables();
-    printf("\n", color);
-}
-static void cmd_send_intr(uint8_t color) {
-    /*
-        If the descriptor tables aren't enable. This will reboot the system.
-    */
-    printf("\nSending interruption 0x3", color);
-    asm volatile ("int $0x3");
-}
-static void cmd_start_timer(uint8_t color) {
-    /*
-        Needs idt and gdt
-    */
-
-    printf("\nStarting timer within 50Hz\n", color);
-    init_timer(50);
-}
-static void s(registers_t r) {
-    printf("HERE\n", VGA_COLOR_WHITE);
-}
-
 // ---- dispatcher ----
 static int streq(unsigned char *a, char *b) {
     while (*a && *b) {
@@ -169,6 +139,6 @@ void run_command(unsigned char *input, uint8_t color) {
             return;
         }
     }
-    if (strlen(input) != 0) printf("\nUnknown command. Type 'help' for available commands\n", color);
+    if (strlen((char*)input) != 0) printf("\nUnknown command. Type 'help' for available commands\n", color);
     else printf("\n", color);
 }

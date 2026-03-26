@@ -53,6 +53,11 @@ void printf(char* data, uint8_t COLOR) {
 		putchar(data[i], COLOR);
 	}
 }
+void print(char* data) {
+	for (size_t i = 0; data[i]; i++) {
+		putchar(data[i], VGA_COLOR_WHITE);
+	}
+}
 
 // Ember2819: Add a scroll so if the screen fills you can scroll down
 // bonk enjoyer(dorito girl) : make it work
@@ -193,35 +198,4 @@ void input(unsigned char* buff, size_t buffer_size, uint8_t color) {
 
     // Ember2819: arrow recall
     history_push(buff);
-}
-char* atoi(int n, char* buffer) {
-    // Source - https://stackoverflow.com/a/3982385
-
-    int i = 0;
-    bool isNeg = n<0;
-    unsigned int n1 = isNeg ? -n : n;
-
-    while(n1!=0)
-    {
-        buffer[i++] = n1%10+'0';
-        n1=n1/10;
-    }
-
-    if(isNeg)
-        buffer[i++] = '-';
-    buffer[i] = '\0';
-
-    for(int t = 0; t < i/2; t++)
-    {
-        buffer[t] ^= buffer[i-t-1];
-        buffer[i-t-1] ^= buffer[t];
-        buffer[t] ^= buffer[i-t-1];
-    }
-
-    if(n == 0)
-    {
-        buffer[0] = '0';
-        buffer[1] = '\0';
-    }   
-    return buffer;
 }

@@ -11,9 +11,10 @@ void process_input(unsigned char *buffer) {
     run_command(buffer, TERM_COLOR);
 }
 
+static void kmain();
+
 __attribute__((section(".text.entry"))) // Add section attribute so linker knows this should be at the start
-void _entry()
-{
+void _entry() {
     // Initialise display.
     vga_clear(TERM_COLOR);
     printf("----- COMMUNITY OS v1.0 -----\n", TERM_COLOR);
@@ -22,7 +23,22 @@ void _entry()
 
     // Setup keyboard layouts
     set_layout(LAYOUTS[0]);
-    
+
+    printf("Enabling tables...\n", VGA_COLOR_LIGHT_GREY);
+    // init_desc_tables();
+    printf("Done!", VGA_COLOR_LIGHT_GREY);
+    // printf("Testing interruption...", VGA_COLOR_LIGHT_GREY);
+    // asm volatile("int $0x3");
+    printf("\nInterruption test completed!\n", VGA_COLOR_LIGHT_GREY);
+    // init_timer(150);
+    kmain(); // _entry will be the initialization
+}
+
+static void kmain()
+{
+    // malloc(938);
+    // outb(0x64, 0xfe); // Reboots the machine? (It acts weird in QEMU, but it reboots at least)
+
     while (1) {    // Shell loop
         // Prints shell prompt
         printf("> ", PROMPT_COLOR);
