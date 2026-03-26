@@ -1,3 +1,6 @@
+#include "comos/comos.h"
+#include "terminal/terminal.h"
+#include <stdint.h>
 void* memcpy(void* dest, const void* src, unsigned long n) {
     // n = Number of bytes
 
@@ -30,14 +33,15 @@ int strlen(char* ptr) {
 }
 
 //replace with real allocator later but should be fine for now
-static unsigned char heap[65536];
+extern unsigned char __bss_start;
+extern unsigned char __bss_end;
 static unsigned long heap_ptr = 0;
 
 void* malloc(unsigned long size) {
-    if ((heap_ptr + size) > sizeof(heap)) {
+    if ((heap_ptr + size) > __bss_end) {
         return 0;
     }
-    void* p = &heap[heap_ptr];
+    void* p = (void*)(&__bss_start)[heap_ptr];
     heap_ptr += size;
     return p;
 }

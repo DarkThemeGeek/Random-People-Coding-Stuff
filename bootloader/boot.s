@@ -213,7 +213,7 @@ protected_mode_exec:
 	mov	fs, ax
 	mov	gs, ax
 
-	jmp	0x8000		;; Finally, jumping to the kernel
+	jmp	0x8000		;; Finally, jumping to the kernel ;; Why 0x8000 instead of 0x1000?
 	;;hlt
 times 510 - ($ - $$) db 0
 
