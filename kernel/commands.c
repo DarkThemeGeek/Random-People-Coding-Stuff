@@ -27,16 +27,16 @@ static int num_commands = sizeof(commands) / sizeof(commands[0]);
 // ---- Command Functions ----
 
 static void cmd_help(uint8_t color) {
-    printf("\n\nhelp - Show this message\n\n", color);
-    printf("hello - Say hello\n\n", color);
-    printf("contributors - Display names of all contributors\n\n", color);
-    printf("setkeyswe - Set the keyboard layout to Swedish QWERTY\n\n", color); // Zorx555 - Keyboard layout commands
-    printf("setkeyus - Set the keyboard layout to US QWERTY\n\n", color);
-    printf("setkeyuk - Set the keyboard layout to UK QWERTY\n\n", color); // MorganPG1 - Add UK Keyboard layout
-    printf("clear - Clear the screen\n\n", color); //ember
-    printf("version - Show the current version of the operating system\n\n", color); // TheOtterMonarch - Output version of the OS
-    printf("chars - Print the available characters\n\n", color);
-    printf("comos - Run the .comos scripting language\n\n", color);
+    printf("\nhelp - Show this message\n", color);
+    printf("hello - Say hello\n", color);
+    printf("contributors - Display names of all contributors\n", color);
+    printf("setkeyswe - Set the keyboard layout to Swedish QWERTY\n", color); // Zorx555 - Keyboard layout commands
+    printf("setkeyus - Set the keyboard layout to US QWERTY\n", color);
+    printf("setkeyuk - Set the keyboard layout to UK QWERTY\n", color); // MorganPG1 - Add UK Keyboard layout
+    printf("clear - Clear the screen\n", color); //ember
+    printf("version - Show the current version of the operating system\n", color); // TheOtterMonarch - Output version of the OS
+    printf("chars - Print the available characters\n", color);
+    printf("comos - Run the .comos scripting language\n", color);
     printf("init_tables - Inits descriptor tables\n", color); // Pumpkicks - Inits the descriptor tables
     printf("send_intr - Sends an interruption\n", color); // Pumpkicks - Sends the interruption 0x3
     printf("start_timer - Starts a timer within 50Hz of velocity\n", color); // Pumpkicks - Starts the timer
