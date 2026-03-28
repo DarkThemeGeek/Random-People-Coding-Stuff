@@ -158,7 +158,6 @@ static size_t fat16_file_read( struct drive_file_t *file, size_t offset, size_t 
 	clusters_to_skip = offset/cluster_size;
 	cluster_offset = offset%cluster_size;
 
-	/* we need to find first real cluster */
 	for ( i = 0; i < clusters_to_skip; i++ )
 	{
 		current_cluster = fat16_next_cluster(file->drive, pvolume, current_cluster);
@@ -167,8 +166,7 @@ static size_t fat16_file_read( struct drive_file_t *file, size_t offset, size_t 
 			return -1;
 	}
 	bytes_read = 0;
-	
-	/* and we can read only now */
+
 	while(bytes_read < len)
 	{
 		if (current_cluster >= FAT16_CLUSTER_BAD)
@@ -211,6 +209,214 @@ static size_t fat16_file_read( struct drive_file_t *file, size_t offset, size_t 
 	return bytes_read;
 }
 
+static int fat16_write_fat(struct kdrive_t *drive, FAT16_Volume *pvol,
+                           uint16_t cluster, uint16_t value)
+{
+	uint32_t fat_offset  = cluster * 2;
+	uint32_t fat_sector  = pvol->fat_lba + (fat_offset / drive->sector_size);
+	uint32_t byte_offset = fat_offset % drive->sector_size;
+	uint8_t  tmp[ATA_SECTOR_SIZE];
+
+	if (drive->read((void*)drive, fat_sector, 1, tmp) < 0) return -1;
+	*(uint16_t *)(tmp + byte_offset) = value;
+	if (drive->write((void*)drive, fat_sector, 1, tmp) < 0) return -1;
+	if (pvol->bpb.num_fats > 1) {
+		uint32_t fat2_sector = fat_sector + pvol->bpb.sectors_per_fat;
+		if (drive->write((void*)drive, fat2_sector, 1, tmp) < 0) return -1;
+	}
+	return 0;
+}
+
+static uint16_t fat16_alloc_cluster(struct kdrive_t *drive, FAT16_Volume *pvol)
+{
+	uint32_t fat_sectors = pvol->bpb.sectors_per_fat;
+	uint32_t entries_per_sector = drive->sector_size / 2;
+	uint8_t  tmp[ATA_SECTOR_SIZE];
+	uint32_t s, e;
+
+	for (s = 0; s < fat_sectors; s++) {
+		if (drive->read((void*)drive, pvol->fat_lba + s, 1, tmp) < 0) return 0;
+		for (e = 0; e < entries_per_sector; e++) {
+			uint16_t val = *(uint16_t *)(tmp + e * 2);
+			uint16_t cluster = (uint16_t)(s * entries_per_sector + e);
+			if (cluster < 2) continue; 
+			if (val == FAT16_CLUSTER_FREE) {
+				*(uint16_t *)(tmp + e * 2) = FAT16_CLUSTER_EOC;
+				if (drive->write((void*)drive, pvol->fat_lba + s, 1, tmp) < 0) return 0;
+				if (pvol->bpb.num_fats > 1)
+					drive->write((void*)drive, pvol->fat_lba + pvol->bpb.sectors_per_fat + s, 1, tmp);
+				return cluster;
+			}
+		}
+	}
+	return 0; // disk full
+}
+
+static size_t fat16_file_write(struct drive_file_t *file, size_t offset,
+                               size_t len, const uint8_t *buf)
+{
+	FAT16_Volume *pvolume = (FAT16_Volume *)file->fs->userdata1;
+	size_t cluster_size   = pvolume->bpb.bytes_per_sector * pvolume->bpb.sectors_per_cluster;
+	uint16_t current_cluster = (uint16_t)file->userdata2;
+	size_t bytes_written  = 0;
+	size_t cluster_offset;
+	uint8_t  tmp[ATA_SECTOR_SIZE];
+
+	if (offset >= file->file_size) return 0;
+	if (offset + len > file->file_size) len = file->file_size - offset;
+
+	uint16_t clusters_to_skip = (uint16_t)(offset / cluster_size);
+	cluster_offset = offset % cluster_size;
+	for (uint16_t i = 0; i < clusters_to_skip; i++) {
+		current_cluster = fat16_next_cluster(file->drive, pvolume, current_cluster);
+		if (current_cluster >= FAT16_CLUSTER_BAD) return bytes_written;
+	}
+
+	while (bytes_written < len) {
+		if (current_cluster >= FAT16_CLUSTER_BAD) break;
+
+		uint32_t lba = cluster_to_lba(pvolume, current_cluster);
+		size_t offset_in_cluster = cluster_offset;
+
+		while (bytes_written < len && offset_in_cluster < cluster_size) {
+			uint32_t sector_index  = (uint32_t)(offset_in_cluster / file->drive->sector_size);
+			uint32_t offset_in_sec = (uint32_t)(offset_in_cluster % file->drive->sector_size);
+			uint32_t avail         = file->drive->sector_size - offset_in_sec;
+			uint32_t chunk         = (uint32_t)(len - bytes_written);
+			if (chunk > avail) chunk = avail;
+
+			if (file->drive->read((void*)file->drive, lba + sector_index, 1, tmp) < 0)
+				return bytes_written;
+			memcpy(tmp + offset_in_sec, buf + bytes_written, chunk);
+			if (file->drive->write((void*)file->drive, lba + sector_index, 1, tmp) < 0)
+				return bytes_written;
+
+			bytes_written      += chunk;
+			offset_in_cluster  += chunk;
+		}
+
+		cluster_offset = 0;
+		if (bytes_written < len)
+			current_cluster = fat16_next_cluster(file->drive, pvolume, current_cluster);
+	}
+	return bytes_written;
+}
+
+static void encode_83_name(char *name, uint8_t *raw8, uint8_t *raw3)
+{
+	int i;
+	for (i = 0; i < 8; i++) raw8[i] = ' ';
+	for (i = 0; i < 3; i++) raw3[i] = ' ';
+
+	int dot = -1;
+	for (i = 0; name[i]; i++) if (name[i] == '.') dot = i;
+
+	int base_len = (dot >= 0) ? dot : (int)strlen(name);
+	if (base_len > 8) base_len = 8;
+	for (i = 0; i < base_len; i++) {
+		char c = name[i];
+		if (c >= 'a' && c <= 'z') c -= 32;
+		raw8[i] = (uint8_t)c;
+	}
+
+	if (dot >= 0) {
+		int ext_len = (int)strlen(name) - dot - 1;
+		if (ext_len > 3) ext_len = 3;
+		for (i = 0; i < ext_len; i++) {
+			char c = name[dot + 1 + i];
+			if (c >= 'a' && c <= 'z') c -= 32;
+			raw3[i] = (uint8_t)c;
+		}
+	}
+}
+
+int fat16_create_file(struct drive_fs_t *fs, char *name,
+                      const uint8_t *content, size_t len)
+{
+	FAT16_Volume *pvol = (FAT16_Volume *)fs->userdata1;
+	struct kdrive_t *drive = fs->drive;
+	uint32_t root_dir_sectors = ((uint32_t)pvol->bpb.root_entry_count * 32
+		+ pvol->bpb.bytes_per_sector - 1) / pvol->bpb.bytes_per_sector;
+
+	uint8_t *root_buf = kmalloc(root_dir_sectors * drive->sector_size);
+	if (drive->read((void*)drive, pvol->root_dir_lba, root_dir_sectors, root_buf) < 0)
+		return -1;
+
+	FAT16_DirEntry *slot = 0;
+	uint32_t total_entries = root_dir_sectors * (drive->sector_size / 32);
+	for (uint32_t i = 0; i < total_entries; i++) {
+		FAT16_DirEntry *e = (FAT16_DirEntry *)root_buf + i;
+		if (e->name[0] == FAT16_ENTRY_FREE || e->name[0] == FAT16_ENTRY_END) {
+			slot = e;
+			break;
+		}
+	}
+	if (!slot) return -1;
+
+	uint16_t first_cluster = 0;
+	uint16_t prev_cluster  = 0;
+	size_t cluster_size = pvol->bpb.bytes_per_sector * pvol->bpb.sectors_per_cluster;
+	size_t remaining    = len;
+
+	size_t clusters_needed = (len == 0) ? 1 : (len + cluster_size - 1) / cluster_size;
+
+	for (size_t c = 0; c < clusters_needed; c++) {
+		uint16_t cl = fat16_alloc_cluster(drive, pvol);
+		if (cl == 0) return -1;
+
+		if (first_cluster == 0) first_cluster = cl;
+		if (prev_cluster  != 0) fat16_write_fat(drive, pvol, prev_cluster, cl);
+		prev_cluster = cl;
+
+		uint32_t lba = cluster_to_lba(pvol, cl);
+		uint8_t  tmp[ATA_SECTOR_SIZE];
+		size_t   written_in_cluster = 0;
+
+		for (uint32_t s = 0; s < pvol->bpb.sectors_per_cluster; s++) {
+			memset(tmp, 0, drive->sector_size);
+			size_t chunk = (remaining > drive->sector_size) ? drive->sector_size : remaining;
+			if (chunk > 0) {
+				size_t src_off = len - remaining;
+				memcpy(tmp, content + src_off, chunk);
+				remaining -= chunk;
+			}
+			drive->write((void*)drive, lba + s, 1, tmp);
+		}
+	}
+
+	memset(slot, 0, sizeof(FAT16_DirEntry));
+	encode_83_name(name, slot->name, slot->ext);
+	slot->attributes   = FAT16_ATTR_ARCHIVE;
+	slot->first_cluster = first_cluster;
+	slot->file_size    = (uint32_t)len;
+	slot->write_date   = (uint16_t)((44 << 9) | (1 << 5) | 1);
+	slot->write_time   = 0;
+	slot->create_date  = slot->write_date;
+	slot->create_time  = 0;
+
+	if (drive->write((void*)drive, pvol->root_dir_lba, root_dir_sectors, root_buf) < 0)
+		return -1;
+
+	return 0;
+}
+
+void fat16_print_info(struct drive_fs_t *fs, uint8_t color)
+{
+	FAT16_Volume *v = (FAT16_Volume *)fs->userdata1;
+	printc("-- FAT16 Volume Info --\n", color);
+	printc("  Bytes/sector:      ", color); print_int(v->bpb.bytes_per_sector);    printc("\n", color);
+	printc("  Sectors/cluster:   ", color); print_int(v->bpb.sectors_per_cluster); printc("\n", color);
+	printc("  Reserved sectors:  ", color); print_int(v->bpb.reserved_sectors);    printc("\n", color);
+	printc("  FATs:              ", color); print_int(v->bpb.num_fats);             printc("\n", color);
+	printc("  Root entries:      ", color); print_int(v->bpb.root_entry_count);    printc("\n", color);
+	printc("  Sectors/FAT:       ", color); print_int(v->bpb.sectors_per_fat);     printc("\n", color);
+	printc("  Total sectors:     ", color); print_int(v->total_sectors);           printc("\n", color);
+	printc("  FAT LBA:           ", color); print_int(v->fat_lba);                 printc("\n", color);
+	printc("  Root dir LBA:      ", color); print_int(v->root_dir_lba);            printc("\n", color);
+	printc("  Data area LBA:     ", color); print_int(v->data_lba);                printc("\n", color);
+	printc("-----------------------\n", color);
+}
+
 static struct fs_entries_t fat16_get_root_entries( struct drive_fs_t *fs )
 {
 	FAT16_Volume *pvolume;
@@ -241,7 +447,7 @@ static struct fs_entries_t fat16_get_root_entries( struct drive_fs_t *fs )
 	{
 		if (n < 0)
 			break;
-		entries = (FAT16_DirEntry*)sector_buf;
+		entries = (FAT16_DirEntry*)(sector_buf + sector * pvolume->bpb.bytes_per_sector);
 
 		for ( i = 0; i < pvolume->bpb.bytes_per_sector / 32; i++ )
 		{
@@ -262,11 +468,10 @@ done_listing_count:
 	fs_entries.entries = kmalloc(fs_entries.count*sizeof(drive_entry_t));
 	memset(fs_entries.entries, 0, fs_entries.count*sizeof(drive_entry_t));
 
+	n = 0; /* global entry index across all sectors */
 	for ( sector = 0; sector < root_dir_sectors; sector++ )
 	{
-		entries = (FAT16_DirEntry*)sector_buf;
-
-		n = 0;
+		entries = (FAT16_DirEntry*)(sector_buf + sector * pvolume->bpb.bytes_per_sector);
 
 		for ( i = 0; i < pvolume->bpb.bytes_per_sector / 32; i++ )
 		{
@@ -292,7 +497,8 @@ done_listing_count:
 				entry->file.file_size = entries[i].file_size;
 				entry->file.userdata1 = pvolume;
 				entry->file.userdata2 = entries[i].first_cluster;
-				entry->file.read = (fn_df_read)fat16_file_read;
+				entry->file.read  = (fn_df_read)fat16_file_read;
+				entry->file.write = (fn_df_write)fat16_file_write;
 				format_83_name(entries[i].name, entries[i].ext, fs_entries.entries[n].file.name);
 			}
 			n++;
@@ -346,7 +552,7 @@ struct drive_fs_t *fat16_drive_open( struct kdrive_t *drive, struct partition_t 
 	memcpy(pvolume, &volume, sizeof(FAT16_Volume));
 	filesystem->drive = drive;
 	filesystem->userdata1 = pvolume;
-	filesystem->get_entries = fat16_get_root_entries;
+	filesystem->get_entries = (fn_root_get_entries)fat16_get_root_entries;
 	return filesystem;
 };
 
