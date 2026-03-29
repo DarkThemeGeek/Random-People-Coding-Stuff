@@ -1,12 +1,13 @@
-#include "comos.h"
+//ember2819
+#include "gk.h"
 
 // helpers
 static void strcpy_s(char* d, const char* s) {
     int i = 0; while (s[i]) { d[i] = s[i]; i++; } d[i] = 0;
 }
 
-static int new_node(ComosState* s, NodeType t, int line) {
-    if (s->node_count >= COMOS_MAX_NODES) {
+static int new_node(GkState* s, NodeType t, int line) {
+    if (s->node_count >= GK_MAX_NODES) {
         strcpy_s(s->error, "too many AST nodes");
         return -1;
     }
@@ -21,37 +22,37 @@ static int new_node(ComosState* s, NodeType t, int line) {
     return idx;
 }
 
-static Token* peek(ComosState* s) {
+static Token* peek(GkState* s) {
     return &s->tokens[s->tok_pos];
 }
-static Token* advance(ComosState* s) {
+static Token* advance(GkState* s) {
     Token* t = &s->tokens[s->tok_pos];
     if (t->type != TOK_EOF) s->tok_pos++;
     return t;
 }
-static bool check(ComosState* s, TokenType t) {
+static bool check(GkState* s, TokenType t) {
     return peek(s)->type == t;
 }
-static bool match(ComosState* s, TokenType t) {
+static bool match(GkState* s, TokenType t) {
     if (check(s, t)) { advance(s); return true; }
     return false;
 }
-static bool expect(ComosState* s, TokenType t, const char* msg) {
+static bool expect(GkState* s, TokenType t, const char* msg) {
     if (match(s, t)) return true;
     strcpy_s(s->error, msg);
     return false;
 }
 
 // Skip blank newlines between statements
-static void skip_newlines(ComosState* s) {
+static void skip_newlines(GkState* s) {
     while (check(s, TOK_NEWLINE)) advance(s);
 }
 
-static int parse_expr(ComosState* s);
-static int parse_stmt(ComosState* s);
-static int parse_block(ComosState* s);
+static int parse_expr(GkState* s);
+static int parse_stmt(GkState* s);
+static int parse_block(GkState* s);
 
-static int parse_primary(ComosState* s) {
+static int parse_primary(GkState* s) {
     Token* t = peek(s);
     int line  = t->line;
 
@@ -82,15 +83,28 @@ static int parse_primary(ComosState* s) {
             advance(s);
 
             NodeType nt = NODE_CALL;
+            // Check for print builtin
             if (t->str_val[0] == 'p' && t->str_val[1] == 'r' &&
                 t->str_val[2] == 'i' && t->str_val[3] == 'n' &&
                 t->str_val[4] == 't' && t->str_val[5] == 0) {
                 nt = NODE_PRINT;
             }
+            // Check for range builtin
             if (t->str_val[0] == 'r' && t->str_val[1] == 'a' &&
                 t->str_val[2] == 'n' && t->str_val[3] == 'g' &&
                 t->str_val[4] == 'e' && t->str_val[5] == 0) {
                 nt = NODE_RANGE;
+            }
+            // Check for input() builtin
+            if (t->str_val[0] == 'i' && t->str_val[1] == 'n' &&
+                t->str_val[2] == 'p' && t->str_val[3] == 'u' &&
+                t->str_val[4] == 't' && t->str_val[5] == 0) {
+                nt = NODE_INPUT;
+            }
+            // Check for int() builtin
+            if (t->str_val[0] == 'i' && t->str_val[1] == 'n' &&
+                t->str_val[2] == 't' && t->str_val[3] == 0) {
+                nt = NODE_INT_CAST;
             }
 
             int n = new_node(s, nt, line);
@@ -100,7 +114,7 @@ static int parse_primary(ComosState* s) {
             while (!check(s, TOK_RPAREN) && !check(s, TOK_EOF)) {
                 int arg = parse_expr(s);
                 if (arg < 0) return -1;
-                if (s->nodes[n].n_children >= COMOS_MAX_CHILDREN) {
+                if (s->nodes[n].n_children >= GK_MAX_CHILDREN) {
                     strcpy_s(s->error, "too many arguments");
                     return -1;
                 }
@@ -127,7 +141,7 @@ static int parse_primary(ComosState* s) {
     return -1;
 }
 
-static int parse_unary(ComosState* s) {
+static int parse_unary(GkState* s) {
     int line = peek(s)->line;
     if (check(s, TOK_MINUS)) {
         advance(s);
@@ -154,7 +168,7 @@ static int parse_unary(ComosState* s) {
     return parse_primary(s);
 }
 
-static int parse_mul(ComosState* s) {
+static int parse_mul(GkState* s) {
     int left = parse_unary(s);
     if (left < 0) return -1;
     while (check(s, TOK_STAR) || check(s, TOK_SLASH) || check(s, TOK_PERCENT)) {
@@ -174,7 +188,7 @@ static int parse_mul(ComosState* s) {
     return left;
 }
 
-static int parse_add(ComosState* s) {
+static int parse_add(GkState* s) {
     int left = parse_mul(s);
     if (left < 0) return -1;
     while (check(s, TOK_PLUS) || check(s, TOK_MINUS)) {
@@ -194,7 +208,7 @@ static int parse_add(ComosState* s) {
     return left;
 }
 
-static int parse_cmp(ComosState* s) {
+static int parse_cmp(GkState* s) {
     int left = parse_add(s);
     if (left < 0) return -1;
     while (check(s, TOK_EQ)  || check(s, TOK_NEQ) ||
@@ -216,7 +230,7 @@ static int parse_cmp(ComosState* s) {
     return left;
 }
 
-static int parse_and(ComosState* s) {
+static int parse_and(GkState* s) {
     int left = parse_cmp(s);
     if (left < 0) return -1;
     while (check(s, TOK_AND)) {
@@ -235,7 +249,7 @@ static int parse_and(ComosState* s) {
     return left;
 }
 
-static int parse_or(ComosState* s) {
+static int parse_or(GkState* s) {
     int left = parse_and(s);
     if (left < 0) return -1;
     while (check(s, TOK_OR)) {
@@ -254,11 +268,11 @@ static int parse_or(ComosState* s) {
     return left;
 }
 
-static int parse_expr(ComosState* s) {
+static int parse_expr(GkState* s) {
     return parse_or(s);
 }
 
-static int parse_block(ComosState* s) {
+static int parse_block(GkState* s) {
     int line = peek(s)->line;
     if (!expect(s, TOK_INDENT, "expected indented block")) return -1;
 
@@ -269,7 +283,7 @@ static int parse_block(ComosState* s) {
     while (!check(s, TOK_DEDENT) && !check(s, TOK_EOF)) {
         int st = parse_stmt(s);
         if (st < 0) return -1;
-        if (s->nodes[block].n_children >= COMOS_MAX_CHILDREN) {
+        if (s->nodes[block].n_children >= GK_MAX_CHILDREN) {
             strcpy_s(s->error, "block too large");
             return -1;
         }
@@ -280,7 +294,7 @@ static int parse_block(ComosState* s) {
     return block;
 }
 
-static int parse_stmt(ComosState* s) {
+static int parse_stmt(GkState* s) {
     Token* t  = peek(s);
     int line  = t->line;
 
@@ -408,7 +422,7 @@ static int parse_stmt(ComosState* s) {
             return -1;
         }
         advance(s);
-        if (!expect(s, TOK_IN,    "expected 'in' after for variable")) return -1;
+        if (!expect(s, TOK_IN, "expected 'in' after for variable")) return -1;
 
         int n = new_node(s, NODE_FOR, line);
         if (n < 0) return -1;
@@ -452,7 +466,7 @@ static int parse_stmt(ComosState* s) {
     return expr;
 }
 
-int comos_parse(ComosState* s) {
+int gk_parse(GkState* s) {
     s->node_count = 0;
     s->tok_pos    = 0;
 
@@ -463,7 +477,7 @@ int comos_parse(ComosState* s) {
     while (!check(s, TOK_EOF)) {
         int st = parse_stmt(s);
         if (st < 0) return -1;
-        if (s->nodes[root].n_children >= COMOS_MAX_CHILDREN) {
+        if (s->nodes[root].n_children >= GK_MAX_CHILDREN) {
             strcpy_s(s->error, "too many top-level statements");
             return -1;
         }

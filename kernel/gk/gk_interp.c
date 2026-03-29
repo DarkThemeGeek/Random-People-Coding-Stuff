@@ -1,4 +1,5 @@
-#include "comos.h"
+//ember2819
+#include "gk.h"
 
 // helpers
 
@@ -17,7 +18,7 @@ static int strlen_s(const char* s) {
 static void strcat_s(char* dst, const char* src) {
     int d = strlen_s(dst);
     int i = 0;
-    while (src[i] && d + i < COMOS_MAX_STR - 1) {
+    while (src[i] && d + i < GK_MAX_STR - 1) {
         dst[d + i] = src[i];
         i++;
     }
@@ -59,14 +60,14 @@ static void val_to_str(Value v, char* buf) {
     strcpy_s(buf, "None");
 }
 
-static Var* find_var(ComosState* s, const char* name) {
+static Var* find_var(GkState* s, const char* name) {
     for (int i = s->var_count - 1; i >= 0; i--) {
         if (streq(s->vars[i].name, name)) return &s->vars[i];
     }
     return 0;
 }
 
-static bool set_var(ComosState* s, const char* name, Value val) {
+static bool set_var(GkState* s, const char* name, Value val) {
     for (int i = s->var_count - 1; i >= 0; i--) {
         if (s->vars[i].scope < s->call_depth) break;
         if (streq(s->vars[i].name, name)) {
@@ -75,7 +76,7 @@ static bool set_var(ComosState* s, const char* name, Value val) {
         }
     }
 
-    if (s->var_count >= COMOS_MAX_VARS) {
+    if (s->var_count >= GK_MAX_VARS) {
         strcpy_s(s->error, "too many variables");
         return false;
     }
@@ -86,7 +87,7 @@ static bool set_var(ComosState* s, const char* name, Value val) {
     return true;
 }
 
-static void pop_scope(ComosState* s) {
+static void pop_scope(GkState* s) {
     while (s->var_count > 0 &&
            s->vars[s->var_count - 1].scope >= s->call_depth) {
         s->var_count--;
@@ -94,16 +95,16 @@ static void pop_scope(ComosState* s) {
 }
 
 // Find a function by name
-static FuncDef* find_func(ComosState* s, const char* name) {
+static FuncDef* find_func(GkState* s, const char* name) {
     for (int i = 0; i < s->func_count; i++) {
         if (streq(s->funcs[i].name, name)) return &s->funcs[i];
     }
     return 0;
 }
 
-static Value eval(ComosState* s, int node_idx);
+static Value eval(GkState* s, int node_idx);
 
-static Value eval(ComosState* s, int node_idx) {
+static Value eval(GkState* s, int node_idx) {
     if (node_idx < 0 || s->error[0]) return val_none();
 
     Node* n = &s->nodes[node_idx];
@@ -163,9 +164,9 @@ static Value eval(ComosState* s, int node_idx) {
         if (s->error[0]) return val_none();
 
         if (n->op == TOK_PLUS && l.type == VAL_STR) {
-            char buf[COMOS_MAX_STR];
+            char buf[GK_MAX_STR];
             strcpy_s(buf, l.str_val);
-            char rbuf[COMOS_MAX_STR];
+            char rbuf[GK_MAX_STR];
             val_to_str(r, rbuf);
             strcat_s(buf, rbuf);
             return val_str(buf);
@@ -213,17 +214,66 @@ static Value eval(ComosState* s, int node_idx) {
         for (int i = 0; i < n->n_children; i++) {
             Value v = eval(s, n->child[i]);
             if (s->error[0]) return val_none();
-            char buf[COMOS_MAX_STR];
+            char buf[GK_MAX_STR];
             val_to_str(v, buf);
-            comos_print(buf);
-            if (i < n->n_children - 1) comos_print(" ");
+            gk_print(buf);
+            if (i < n->n_children - 1) gk_print(" ");
         }
-        comos_print("\n");
+        gk_print("\n");
         return val_none();
     }
 
-    // Range Built in function
-    case NODE_RANGE:
+    case NODE_INPUT: {
+        // If a prompt argument was provided, print it first
+        if (n->n_children > 0) {
+            Value prompt = eval(s, n->child[0]);
+            if (s->error[0]) return val_none();
+            char pbuf[GK_MAX_STR];
+            val_to_str(prompt, pbuf);
+            gk_print(pbuf);
+        }
+        char line_buf[GK_MAX_STR];
+        line_buf[0] = 0;
+#ifdef GK_HOSTED
+        gk_hosted_getline(line_buf, GK_MAX_STR);
+#else
+        input((unsigned char*)line_buf, GK_MAX_STR - 1, TERM_COLOR);
+#endif
+        gk_print("\n");
+        return val_str(line_buf);
+    }
+
+    case NODE_INT_CAST: {
+        if (n->n_children != 1) {
+            strcpy_s(s->error, "int() takes exactly one argument");
+            return val_none();
+        }
+        Value v = eval(s, n->child[0]);
+        if (s->error[0]) return val_none();
+        if (v.type == VAL_INT) return v; // already an int, pass through
+        if (v.type != VAL_STR) {
+            strcpy_s(s->error, "int() requires a string or integer argument");
+            return val_none();
+        }
+        // Parse the string into an integer
+        const char* p = v.str_val;
+        int result = 0;
+        int neg = 0;
+        if (*p == '-') { neg = 1; p++; }
+        if (*p == 0) {
+            strcpy_s(s->error, "int() invalid literal");
+            return val_none();
+        }
+        while (*p) {
+            if (*p < '0' || *p > '9') {
+                strcpy_s(s->error, "int() invalid literal");
+                return val_none();
+            }
+            result = result * 10 + (*p - '0');
+            p++;
+        }
+        return val_int(neg ? -result : result);
+    }
         return val_int(0);
 
     case NODE_BLOCK: {
@@ -288,7 +338,7 @@ static Value eval(ComosState* s, int node_idx) {
     }
 
     case NODE_DEF: {
-        if (s->func_count >= COMOS_MAX_FUNCS) {
+        if (s->func_count >= GK_MAX_FUNCS) {
             strcpy_s(s->error, "too many function definitions");
             return val_none();
         }
@@ -296,7 +346,7 @@ static Value eval(ComosState* s, int node_idx) {
         strcpy_s(f->name, n->str_val);
         f->n_params = 0;
         int body_child = n->n_children - 1;
-        for (int i = 0; i < body_child && i < COMOS_MAX_PARAMS; i++) {
+        for (int i = 0; i < body_child && i < GK_MAX_PARAMS; i++) {
             strcpy_s(f->params[f->n_params++], s->nodes[n->child[i]].str_val);
         }
         f->body_node = n->child[body_child];
@@ -314,12 +364,12 @@ static Value eval(ComosState* s, int node_idx) {
             strcpy_s(s->error, "wrong number of arguments");
             return val_none();
         }
-        if (s->call_depth >= COMOS_MAX_CALL_DEPTH) {
+        if (s->call_depth >= GK_MAX_CALL_DEPTH) {
             strcpy_s(s->error, "max call depth exceeded");
             return val_none();
         }
 
-        Value args[COMOS_MAX_PARAMS];
+        Value args[GK_MAX_PARAMS];
         for (int i = 0; i < n->n_children; i++) {
             args[i] = eval(s, n->child[i]);
             if (s->error[0]) return val_none();
@@ -364,7 +414,7 @@ static Value eval(ComosState* s, int node_idx) {
     }
 }
 
-void comos_init(ComosState* s) {
+void gk_init(GkState* s) {
     s->node_count  = 0;
     s->tok_count   = 0;
     s->tok_pos     = 0;
@@ -380,38 +430,38 @@ void comos_init(ComosState* s) {
     s->return_val = none;
 }
 
-extern bool comos_lex(ComosState* s, const char* src);
-extern int  comos_parse(ComosState* s);
+extern bool gk_lex(GkState* s, const char* src);
+extern int  gk_parse(GkState* s);
 
-bool comos_run(ComosState* s, const char* src) {
+bool gk_run(GkState* s, const char* src) {
     s->error[0]   = 0;
     s->returning  = false;
     s->breaking   = false;
     s->continuing = false;
 
     // Lex
-    if (!comos_lex(s, src)) {
-        comos_print("comos lex error: ");
-        comos_print(s->error);
-        comos_print("\n");
+    if (!gk_lex(s, src)) {
+        gk_print("gk lex error: ");
+        gk_print(s->error);
+        gk_print("\n");
         return false;
     }
 
     // Parse
-    int root = comos_parse(s);
+    int root = gk_parse(s);
     if (root < 0 || s->error[0]) {
-        comos_print("comos parse error: ");
-        comos_print(s->error);
-        comos_print("\n");
+        gk_print("gk parse error: ");
+        gk_print(s->error);
+        gk_print("\n");
         return false;
     }
 
     // Interpret
     eval(s, root);
     if (s->error[0]) {
-        comos_print("comos runtime error: ");
-        comos_print(s->error);
-        comos_print("\n");
+        gk_print("gk runtime error: ");
+        gk_print(s->error);
+        gk_print("\n");
         return false;
     }
 

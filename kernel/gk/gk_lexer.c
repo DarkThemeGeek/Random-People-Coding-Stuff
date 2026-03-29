@@ -1,17 +1,21 @@
-#include "comos.h"
+//ember2819
+// Renamed from comos_lexer.c to gk_lexer.c
+// Updated all ComoState/COMOS references to GkState/GK
+//ember2819 end
+#include "gk.h"
 
 static bool is_digit(char c)  { return c >= '0' && c <= '9'; }
 static bool is_alpha(char c)  { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
 static bool is_alnum(char c)  { return is_alpha(c) || is_digit(c); }
 static bool is_space(char c)  { return c == ' ' || c == '\t'; }
 
-static int comos_strlen(const char* s) {
+static int gk_strlen(const char* s) {
     int n = 0; while (s[n]) n++; return n;
 }
-static void comos_strcpy(char* dst, const char* src) {
+static void gk_strcpy(char* dst, const char* src) {
     int i = 0; while (src[i]) { dst[i] = src[i]; i++; } dst[i] = 0;
 }
-static bool comos_streq(const char* a, const char* b) {
+static bool gk_streq(const char* a, const char* b) {
     int i = 0;
     while (a[i] && b[i]) { if (a[i] != b[i]) return false; i++; }
     return a[i] == b[i];
@@ -40,9 +44,9 @@ static struct { const char* word; TokenType type; } KEYWORDS[] = {
 static int indent_stack[MAX_INDENT];
 static int indent_top;
 
-static bool emit(ComosState* s, TokenType t, int line) {
-    if (s->tok_count >= COMOS_MAX_TOKENS) {
-        comos_strcpy(s->error, "too many tokens");
+static bool emit(GkState* s, TokenType t, int line) {
+    if (s->tok_count >= GK_MAX_TOKENS) {
+        gk_strcpy(s->error, "too many tokens");
         return false;
     }
     s->tokens[s->tok_count].type = t;
@@ -53,19 +57,19 @@ static bool emit(ComosState* s, TokenType t, int line) {
     return true;
 }
 
-static bool emit_int(ComosState* s, int v, int line) {
+static bool emit_int(GkState* s, int v, int line) {
     if (!emit(s, TOK_INT, line)) return false;
     s->tokens[s->tok_count - 1].int_val = v;
     return true;
 }
 
-static bool emit_str(ComosState* s, TokenType t, const char* str, int line) {
+static bool emit_str(GkState* s, TokenType t, const char* str, int line) {
     if (!emit(s, t, line)) return false;
-    comos_strcpy(s->tokens[s->tok_count - 1].str_val, str);
+    gk_strcpy(s->tokens[s->tok_count - 1].str_val, str);
     return true;
 }
 
-bool comos_lex(ComosState* s, const char* src) {
+bool gk_lex(GkState* s, const char* src) {
     s->tok_count = 0;
     s->tok_pos   = 0;
 
@@ -74,7 +78,7 @@ bool comos_lex(ComosState* s, const char* src) {
 
     int i    = 0;
     int line = 1;
-    int src_len = comos_strlen(src);
+    int src_len = gk_strlen(src);
 
     while (i < src_len) {
         int indent = 0;
@@ -120,7 +124,7 @@ bool comos_lex(ComosState* s, const char* src) {
             if (c == '"' || c == '\'') {
                 char quote = c;
                 i++;
-                char buf[COMOS_MAX_STR];
+                char buf[GK_MAX_STR];
                 int  bi = 0;
                 while (i < src_len && src[i] != quote) {
                     if (src[i] == '\\' && i + 1 < src_len) {
@@ -135,7 +139,7 @@ bool comos_lex(ComosState* s, const char* src) {
                         buf[bi++] = src[i];
                     }
                     i++;
-                    if (bi >= COMOS_MAX_STR - 1) break;
+                    if (bi >= GK_MAX_STR - 1) break;
                 }
                 buf[bi] = 0;
                 if (i < src_len) i++;
@@ -154,7 +158,7 @@ bool comos_lex(ComosState* s, const char* src) {
                 // check keyword table
                 TokenType kw = TOK_IDENT;
                 for (int k = 0; KEYWORDS[k].word; k++) {
-                    if (comos_streq(buf, KEYWORDS[k].word)) {
+                    if (gk_streq(buf, KEYWORDS[k].word)) {
                         kw = KEYWORDS[k].type;
                         break;
                     }
